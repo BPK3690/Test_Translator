@@ -1,0 +1,151 @@
+@page "/"
+@rendermode InteractiveServer
+@using BlazorButtonDemo.Services
+@inject AzureTranslatorService Translator
+@inject LocalTranslatorService LocalTranslator
+@inject IJSRuntime JS
+
+<PageTitle>Lingua | Simple translator</PageTitle>
+
+<main class="translator-shell">
+    <header class="translator-header">
+        <p class="eyebrow">LINGUA / QUICK TRANSLATE</p>
+        <h1>Find the right words.</h1>
+        <p class="intro">A calm, focused space for translating everyday language.</p>
+    </header>
+
+    <section class="translator-card" aria-label="Translator">
+        <div class="language-row">
+            <label>
+                <span>Translate from</span>
+                <select @bind="sourceLanguage">
+                    @foreach (var language in languages)
+                    {
+                        <option value="@language.Code">@language.Name</option>
+                    }
+                </select>
+            </label>
+            <button class="swap-button" type="button" title="Swap languages" aria-label="Swap languages" @onclick="SwapLanguages">&#8646;</button>
+            <label>
+                <span>Translate to</span>
+                <select @bind="targetLanguage">
+                    @foreach (var language in languages)
+                    {
+                        <option value="@language.Code">@language.Name</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        <div class="translation-grid">
+            <div class="text-panel">
+                <textarea @bind="sourceText" maxlength="5000" placeholder="Type or paste text here..." aria-label="Text to translate"></textarea>
+                <span class="character-count">@sourceText.Length / 5000</span>
+            </div>
+            <div class="text-panel result-panel">
+                @if (isTranslating)
+                {
+                    <p class="result-placeholder">Translating...</p>
+                }
+                else if (string.IsNullOrWhiteSpace(translatedText))
+                {
+                    <p class="result-placeholder">Your translation will appear here.</p>
+                }
+                else
+                {
+                    <p class="translated-text">@translatedText</p>
+                    <button class="copy-button" type="button" title="Copy translation" aria-label="Copy translation" @onclick="CopyTranslation">&#10697;</button>
+                }
+            </div>
+        </div>
+
+        <div class="action-row">
+            <button class="clear-button" type="button" @onclick="ClearText">Clear</button>
+            <button class="translate-button" type="button" disabled="@(isTranslating || string.IsNullOrWhiteSpace(sourceText))" @onclick="Translate">
+                <span>@(isTranslating ? "Translating..." : "Translate")</span>
+                <span aria-hidden="true">&#8594;</span>
+            </button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <p class="message error-message" role="alert">@errorMessage</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <p class="message success-message" role="status">@successMessage</p>
+        }
+    </section>
+
+    <p class="provider-note">Online translation powered by Azure AI or the public fallback service</p>
+</main>
+
+@code {
+    private readonly (string Code, string Name)[] languages =
+    [
+        ("en", "English"),
+        ("es", "Spanish"),
+        ("fr", "French"),
+        ("de", "German"),
+        ("it", "Italian"),
+        ("pt", "Portuguese"),
+        ("ja", "Japanese")
+    ];
+
+    private string sourceLanguage = "en";
+    private string targetLanguage = "es";
+    private string sourceText = string.Empty;
+    private string translatedText = string.Empty;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private bool isTranslating;
+
+    private async Task Translate()
+    {
+        if (string.IsNullOrWhiteSpace(sourceText))
+        {
+            return;
+        }
+
+        isTranslating = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        try
+        {
+            translatedText = await LocalTranslator.TryTranslateAsync(sourceText.Trim(), sourceLanguage, targetLanguage)
+                ?? await Translator.TranslateAsync(sourceText.Trim(), sourceLanguage, targetLanguage);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException)
+        {
+            translatedText = string.Empty;
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isTranslating = false;
+        }
+    }
+
+    private void SwapLanguages()
+    {
+        (sourceLanguage, targetLanguage) = (targetLanguage, sourceLanguage);
+        (sourceText, translatedText) = (translatedText, sourceText);
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void ClearText()
+    {
+        sourceText = string.Empty;
+        translatedText = string.Empty;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private async Task CopyTranslation()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", translatedText);
+        successMessage = "Translation copied to clipboard.";
+    }
+}
