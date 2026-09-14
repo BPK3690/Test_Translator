@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+bin
+obj
+tests
+local-translator/.venv
+local-translator/__pycache__
+*.user
+*.suo
+appsettings.Local.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
